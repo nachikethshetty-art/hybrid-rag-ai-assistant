@@ -44,11 +44,22 @@ def load_vectorstore():
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    vectorstore = FAISS.load_local(
-        VECTOR_PATH,
-        embeddings,
-        allow_dangerous_deserialization=True
-    )
+
+from langchain_community.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
+
+
+def load_vectorstore():
+    embeddings = HuggingFaceEmbeddings()
+
+    # Example documents
+    docs = [
+        "RAG stands for Retrieval Augmented Generation.",
+        "LangChain helps build LLM applications.",
+        "FAISS is a vector database used for similarity search."
+    ]
+
+    vectorstore = FAISS.from_texts(docs, embeddings)
 
     return vectorstore
 
