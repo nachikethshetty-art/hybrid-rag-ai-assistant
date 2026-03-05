@@ -1,22 +1,22 @@
-Hybrid RAG AI Assistant
+# Hybrid RAG AI Assistant
 
-A production-style Hybrid Retrieval-Augmented Generation (RAG) AI Assistant that combines:
+A **production-style Hybrid Retrieval-Augmented Generation (RAG) AI Assistant** that combines:
 
-• Local document search using FAISS Vector Database
-• LLM reasoning using Groq LLM inference
-• Real-time knowledge retrieval using Tavily Web Search
-• Interactive UI built with Streamlit
-• Cloud deployment using AWS EC2
+* Local document search using **FAISS Vector Database**
+* LLM reasoning using **Groq LLM inference**
+* Real-time knowledge retrieval using **Tavily Web Search**
+* Interactive UI built with **Streamlit**
+* Cloud deployment using **Streamlit Cloud**
 
 This system answers questions using:
 
-Knowledge stored in uploaded documents
+* Knowledge stored in uploaded documents
+* General LLM knowledge
+* Live information from the internet
 
-General LLM knowledge
+---
 
-Live information from the internet
-
-Project Architecture
+# Project Architecture
 
 User Query
 ↓
@@ -31,106 +31,118 @@ Hybrid Query Engine
 ↓
 Final Answer Returned to User
 
-Features
+---
 
-• Hybrid Retrieval System
-• Vector database document search
-• Real-time internet search
-• LLM reasoning
-• Fast inference with Groq
-• Streamlit user interface
-• AWS deployment ready
-• Production-like architecture
+# Features
 
-Technologies Used
+* Hybrid Retrieval System
+* Vector database document search
+* Real-time internet search
+* LLM reasoning
+* Fast inference with Groq
+* Streamlit user interface
+* Cloud deployment ready
+* Production-like architecture
 
-Python – Core programming
-LangChain – LLM orchestration
-FAISS – Vector similarity search
-Sentence Transformers – Embeddings
-Groq API – High speed LLM inference
-Tavily API – Web search
-Streamlit – Web interface
-AWS EC2 – Cloud deployment
+---
 
-Why RAG?
+# Technologies Used
 
-Large Language Models sometimes produce hallucinations or outdated information.
+**Python** – Core programming
+**LangChain** – LLM orchestration
+**FAISS** – Vector similarity search
+**Sentence Transformers** – Embeddings
+**Groq API** – High speed LLM inference
+**Tavily API** – Web search
+**Streamlit** – Web interface
+**Streamlit Cloud** – Application deployment
+
+---
+
+# Why RAG?
+
+Large Language Models sometimes produce **hallucinations or outdated information**.
 
 RAG solves this problem by:
 
-Retrieving relevant documents
-
-Passing them as context to the LLM
-
-Generating grounded responses
+1. Retrieving relevant documents
+2. Passing them as context to the LLM
+3. Generating grounded responses
 
 Benefits:
 
-• More accurate answers
-• Context-aware responses
-• Ability to use custom data
+* More accurate answers
+* Context-aware responses
+* Ability to use custom data
 
-Why FAISS?
+---
+
+# Why FAISS?
 
 FAISS was selected because it provides:
 
-• Extremely fast similarity search
-• Efficient vector storage
-• Scales to large datasets
-• Widely used in production AI systems
+* Extremely fast similarity search
+* Efficient vector storage
+* Scales to large datasets
+* Widely used in production AI systems
 
-Why Ollama Initially?
+---
 
-The project initially used Ollama.
+# Why Ollama Initially?
+
+The project initially used **Ollama**.
 
 Advantages:
 
-• Runs LLM locally
-• No API cost
-• Privacy-friendly
-• Offline capability
+* Runs LLM locally
+* No API cost
+* Privacy-friendly
+* Offline capability
 
 However it has limitations:
 
-• Requires large RAM
-• Difficult to deploy on cloud servers
-• Heavy CPU/GPU requirements
+* Requires large RAM
+* Difficult to deploy on cloud servers
+* Heavy CPU/GPU requirements
 
-Why We Migrated to Groq
+---
 
-For deployment we switched to Groq LLM API.
+# Why We Migrated to Groq
+
+For deployment we switched to **Groq LLM API**.
 
 Advantages:
 
-• Extremely fast inference
-• No GPU required on server
-• Works on low-cost cloud instances
-• Easy cloud deployment
+* Extremely fast inference
+* No GPU required on server
+* Works on low-cost cloud instances
+* Easy cloud deployment
 
-This allowed the system to run efficiently on AWS EC2 Free Tier instances.
+---
 
-Hybrid Query Strategy
+# Hybrid Query Strategy
 
 The system processes queries in the following order:
 
-Vector Search
+### 1. Vector Search
 
 Search FAISS vector database for relevant document chunks.
 
-LLM Knowledge
+### 2. LLM Knowledge
 
 If document context is insufficient, the system uses LLM reasoning.
 
-Web Search
+### 3. Web Search
 
-If the question requires current or external knowledge, Tavily API is used.
+If the question requires current or external knowledge, **Tavily API** is used.
 
-This ensures accurate and up-to-date responses.
+This ensures **accurate and up-to-date responses**.
 
-Project Structure
+---
 
-voice-rag-assistant
+# Project Structure
+
+hybrid-rag-ai-assistant
 
 app
 │
@@ -151,33 +163,43 @@ requirements.txt
 
 README.md
 
-Installation
+---
 
-Clone the repository
+# Installation
 
-git clone https://github.com/yourusername/hybrid-rag-ai-assistant.git
+## Clone the repository
+
+git clone https://github.com/nachikethshetty-art/hybrid-rag-ai-assistant.git
 
 cd hybrid-rag-ai-assistant
 
-Create virtual environment
+---
+
+## Create virtual environment
 
 python -m venv .venv
 
 source .venv/bin/activate
 
-Install dependencies
+---
+
+## Install dependencies
 
 pip install -r requirements.txt
 
-Environment Variables
+---
 
-Create a .env file
+# Environment Variables
+
+Create a **.env** file
 
 GROQ_API_KEY=your_key
 
 TAVILY_API_KEY=your_key
 
-Run the Application
+---
+
+# Run the Application
 
 streamlit run app/ui/streamlit_app.py
 
@@ -185,17 +207,58 @@ Open browser
 
 http://localhost:8501
 
-AWS Deployment
+---
 
-The system can be deployed on AWS EC2.
+# Deployment Journey
 
-Architecture
+During development the system was initially deployed on **AWS EC2** to simulate a production cloud environment.
+
+The goal was to run:
+
+User → EC2 Server → Streamlit UI → Hybrid RAG Engine
+
+However several practical challenges occurred:
+
+* Package compatibility issues
+* Runtime dependency conflicts
+* Streamlit server configuration problems
+* Resource limitations on small EC2 instances
+
+Because of these challenges the deployment strategy was adjusted.
+
+---
+
+# Final Deployment: Streamlit Cloud
+
+The application was ultimately deployed using **Streamlit Cloud**, which provides:
+
+* Direct GitHub integration
+* Automatic environment setup
+* Reliable hosting for Streamlit apps
+* Faster deployment for AI prototypes
+
+---
+
+# Live Application
+
+You can try the deployed application here:
+
+https://hybrid-rag-ai-assistant-lcxr4esza6dnwpj7mkpycy.streamlit.app/
+
+The deployed app allows users to:
+
+* Ask questions about uploaded documents
+* Retrieve answers using FAISS vector search
+* Combine LLM reasoning with Groq inference
+* Retrieve real-time information via Tavily web search
+
+---
+
+# Deployment Architecture (Final)
 
 User
 ↓
-AWS EC2
-↓
-Streamlit Server
+Streamlit Cloud
 ↓
 Hybrid RAG Engine
 
@@ -203,88 +266,49 @@ Hybrid RAG Engine
 • Groq LLM API
 • Tavily Web Search
 
-Steps
+↓
+Answer returned to user
 
-Launch EC2 instance (Ubuntu)
+---
 
-Open ports
+# Example Questions
 
-22 → SSH
-80 → HTTP
-8501 → Streamlit
+* What is machine learning?
+* Explain lithium ion batteries
+* Latest AI news
+* Explain vector databases
 
-Connect to server
+---
 
-ssh -i key.pem ubuntu@public-ip
+# Future Improvements
 
-Install dependencies
+* LangGraph workflow orchestration
+* Agent-based reasoning
+* Multi-document ingestion
+* Authentication system
+* Docker deployment
+* Kubernetes scaling
 
-sudo apt update
+---
 
-sudo apt install python3-pip git -y
-
-Clone repository
-
-git clone repo_url
-
-cd repo
-
-Install libraries
-
-pip install -r requirements.txt
-
-Add environment variables
-
-nano .env
-
-Run application
-
-streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0
-
-Access the app
-
-http://public-ip:8501
-
-Example Questions
-
-What is machine learning
-Explain lithium ion batteries
-Latest AI news
-Explain vector databases
-
-Future Improvements
-
-• LangGraph workflow orchestration
-• Agent-based reasoning
-• Multi-document ingestion
-• Authentication system
-• Docker deployment
-• Kubernetes scaling
-
-Learning Outcomes
+# Learning Outcomes
 
 This project demonstrates:
 
-• Retrieval Augmented Generation
-• Vector search systems
-• LLM integration
-• Hybrid information retrieval
-• AI application deployment
-• Cloud infrastructure
+* Retrieval Augmented Generation
+* Vector search systems
+* LLM integration
+* Hybrid information retrieval
+* AI application deployment
+* Cloud infrastructure
 
-Author
+---
 
-Ajit Kumar
+# Author
+
+Nachiketh S Shetty
 
 Data Science | Machine Learning | AI Systems
 
 GitHub
 https://github.com/nachikethshetty-art
-
-If you want, I can also give you 3 powerful improvements that make this repository look like a FAANG-level AI project:
-
-• Architecture diagram
-• System workflow diagram
-• GitHub badges + screenshots
-
-These dramatically increase recruiter attention.
