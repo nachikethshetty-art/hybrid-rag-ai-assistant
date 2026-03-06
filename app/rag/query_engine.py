@@ -1,17 +1,15 @@
 import os
 from dotenv import load_dotenv
 
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.chains import RetrievalQA
-
 from langchain_groq import ChatGroq
-from tavily import TavilyClient
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_tavily import TavilySearch
 
 
-# ---------------------------------------------------
+# --------------------------------------------------
 # Load environment variables
-# ---------------------------------------------------
+# --------------------------------------------------
 
 load_dotenv()
 
@@ -19,172 +17,126 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 
-# ---------------------------------------------------
-# Initialize Tavily client
-# ---------------------------------------------------
-
-tavily = TavilyClient(api_key=TAVILY_API_KEY)
-
-
-# ---------------------------------------------------
-# Paths
-# ---------------------------------------------------
+# --------------------------------------------------
+# Base directory paths
+# --------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 VECTOR_PATH = os.path.join(BASE_DIR, "vectorstore")
 
 
-# ---------------------------------------------------
-# Load FAISS Vector Store
-# ---------------------------------------------------
-
-def load_vectorstore():
-
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
-
-
-from langchain_community.vectorstores import FAISS
-from langchain.embeddings import HuggingFaceEmbeddings
-
-
-def load_vectorstore():
-    embeddings = HuggingFaceEmbeddings()
-
-    # Example documents
-    docs = [
-        "RAG stands for Retrieval Augmented Generation.",
-        "LangChain helps build LLM applications.",
-        "FAISS is a vector database used for similarity search."
-    ]
-
-    vectorstore = FAISS.from_texts(docs, embeddings)
-
-    return vectorstore
-
-
-# ---------------------------------------------------
-# Create Retrieval QA Chain
-# ---------------------------------------------------
-
-def create_qa_chain():
-
-    vectorstore = load_vectorstore()
-
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-
-    llm = ChatGroq(
-        model="llama-3.1-8b-instant",
-        temperature=0
-    )
-
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=retriever,
-        return_source_documents=True
-    )
-
-    return qa_chain
-
-
-# ---------------------------------------------------
-# Web search using Tavily
-# ---------------------------------------------------
-
-def search_web(query):
-
-    print("🌐 Searching internet with Tavily...")
-
-    results = tavily.search(
-        query=query,
-        max_results=3
-    )
-
-    context = ""
-
-    for r in results["results"]:
-        context += r["content"] + "\n"
-
-    return context
-
-
-# ---------------------------------------------------
-# Initialize QA Chain and LLM
-# ---------------------------------------------------
-
-qa_chain = create_qa_chain()
+# --------------------------------------------------
+# LLM Setup (Groq)
+# --------------------------------------------------
 
 llm = ChatGroq(
-    model="llama-3.1-8b-instant",
-    temperature=0
+    model_name="llama-3.1-8b-instant",
+    temperature=0.3,
+    groq_api_key=GROQ_API_KEY
 )
 
 
-# ---------------------------------------------------
-# Hybrid Query System
-# ---------------------------------------------------
+# --------------------------------------------------
+# Embeddings
+# --------------------------------------------------
 
-def hybrid_query(query):
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
 
-    print("📚 Searching vector database...")
 
-    response = qa_chain.invoke({"query": query})
+# --------------------------------------------------
+# Load FAISS Vector DB
+# --------------------------------------------------
 
-    answer = response["result"]
+vector_db = FAISS.load_local(
+    VECTOR_PATH,
+    embeddings,
+    allow_dangerous_deserialization=True
+)
 
-    # If RAG gives useful answer
-    if answer and "I don't know" not in answer:
 
-        print("📚 Using RAG document answer")
+# --------------------------------------------------
+# Tavily Web Search
+# --------------------------------------------------
 
-        return answer
+search = TavilySearch(k=2)
 
-    # Otherwise use LLM knowledge
-    print("⚡ Using LLM knowledge")
 
-    llm_answer = llm.invoke(query)
+# --------------------------------------------------
+# Hybrid Query Function
+# --------------------------------------------------
 
-    if llm_answer.content:
+def hybrid_query(question: str):
 
-        return llm_answer.content
+    print("\nUser Question:", question)
 
-    # If still no good answer → use internet
-    print("🌐 Using Tavily web search")
+    # ---------------------------
+    # 1️⃣ Vector Search
+    # ---------------------------
 
-    web_data = search_web(query)
+    docs = vector_db.similarity_search(question, k=2)
+
+    vector_context = ""
+
+    for doc in docs:
+        vector_context += doc.page_content[:400] + "\n\n"
+
+
+    # ---------------------------
+    # 2️⃣ Web Search
+    # ---------------------------
+
+    web_results = ""
+
+    try:
+        results = search.invoke({"query": question})
+
+        for r in results:
+            web_results += r["content"] + "\n\n"
+
+    except Exception as e:
+        print("Web search error:", e)
+
+
+    # ---------------------------
+    # 3️⃣ Build Prompt
+    # ---------------------------
 
     final_prompt = f"""
-Use the following internet information to answer the question.
+You are a helpful AI assistant.
 
-Context:
-{web_data}
+Use the context below to answer the user's question.
 
-Question:
-{query}
+Rules:
+- Prefer local document context if relevant.
+- Use web search results for latest information.
+- If neither contains the answer, use general knowledge.
+- Do not explain your reasoning process.
+
+-----------------------------
+LOCAL DOCUMENT CONTEXT:
+{vector_context}
+
+WEB SEARCH RESULTS:
+{web_results}
+
+-----------------------------
+USER QUESTION:
+{question}
+
+FINAL ANSWER:
 """
 
-    final_answer = llm.invoke(final_prompt)
 
-    return final_answer.content
+    # ---------------------------
+    # 4️⃣ LLM Response
+    # ---------------------------
 
+    try:
+        response = llm.invoke(final_prompt)
+        return response.content
 
-# ---------------------------------------------------
-# CLI Testing
-# ---------------------------------------------------
-
-if __name__ == "__main__":
-
-    print("Hybrid RAG system ready! (type 'exit' to quit)\n")
-
-    while True:
-
-        query = input("Question: ")
-
-        if query.lower() == "exit":
-            break
-
-        answer = hybrid_query(query)
-
-        print("\nAnswer:\n", answer)
-        print("\n" + "-" * 60 + "\n")
+    except Exception as e:
+        print("Groq error:", e)
+        return "Sorry, the AI service is currently unavailable."
