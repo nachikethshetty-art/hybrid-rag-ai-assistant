@@ -8,7 +8,7 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 
 
 # --------------------------------------------------
-# Load API Keys (Streamlit Secrets)
+# Load API Keys from Streamlit Secrets
 # --------------------------------------------------
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
@@ -16,7 +16,7 @@ TAVILY_API_KEY = st.secrets["TAVILY_API_KEY"]
 
 
 # --------------------------------------------------
-# Base directory paths
+# Base directory
 # --------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -29,7 +29,7 @@ VECTOR_PATH = os.path.join(BASE_DIR, "vectorstore")
 
 llm = ChatGroq(
     model_name="llama-3.1-8b-instant",
-    temperature=0.2,
+    temperature=0.1,
     groq_api_key=GROQ_API_KEY
 )
 
@@ -53,18 +53,18 @@ try:
         embeddings,
         allow_dangerous_deserialization=True
     )
-    print("Vector DB loaded successfully")
+    print("Vector DB loaded")
 
 except Exception as e:
-    print("Vector DB load error:", e)
+    print("Vector DB error:", e)
     vector_db = None
 
 
 # --------------------------------------------------
-# Tavily Web Search
+# Tavily Search
 # --------------------------------------------------
 
-search = TavilySearchResults(k=8)
+search = TavilySearchResults(k=10)
 
 
 # --------------------------------------------------
@@ -75,27 +75,26 @@ def route_question(question: str):
 
     q = question.lower()
 
-    # Battery / research topics → vector DB
+    # Battery / research → vector DB
     if any(word in q for word in [
         "battery", "lithium", "li-ion",
         "recycling", "cathode", "anode"
     ]):
         return "vector"
 
-    # News / sports / recent events → web search
+    # sports / news / latest info → web search
     if any(word in q for word in [
-        "latest", "today", "news",
-        "2024", "2025", "ipl",
-        "cricket", "match", "winner"
+        "ipl", "cricket", "winner", "match",
+        "latest", "today", "news", "2024", "2025"
     ]):
         return "web"
 
-    # Default → LLM
+    # default → LLM
     return "llm"
 
 
 # --------------------------------------------------
-# Vector Retrieval
+# Vector Search
 # --------------------------------------------------
 
 def vector_search(question):
@@ -114,7 +113,7 @@ def vector_search(question):
 
 
 # --------------------------------------------------
-# Tavily Web Search
+# Web Search
 # --------------------------------------------------
 
 def web_search(question):
@@ -122,10 +121,19 @@ def web_search(question):
     web_context = ""
 
     try:
-        results = search.invoke({"query": question})
+
+        results = search.invoke({
+            "query": question,
+            "search_depth": "advanced"
+        })
 
         for r in results:
-            web_context += f"{r['title']}\n{r['content']}\nSource: {r['url']}\n\n"
+
+            title = r.get("title", "")
+            content = r.get("content", "")
+            url = r.get("url", "")
+
+            web_context += f"{title}\n{content}\nSource: {url}\n\n"
 
     except Exception as e:
         print("Web search error:", e)
@@ -134,17 +142,21 @@ def web_search(question):
 
 
 # --------------------------------------------------
-# LLM Answer
+# LLM Answer (General Knowledge)
 # --------------------------------------------------
 
 def llm_answer(question):
 
     try:
+
         response = llm.invoke(question)
+
         return response.content
 
     except Exception as e:
+
         print("LLM error:", e)
+
         return "LLM service unavailable."
 
 
@@ -158,21 +170,25 @@ def hybrid_query(question: str):
 
     route = route_question(question)
 
-    print("Selected Route:", route)
+    print("Selected route:", route)
 
 
-    # ---------------------------
+    # ------------------------------------
     # VECTOR RAG
-    # ---------------------------
+    # ------------------------------------
 
     if route == "vector":
 
         context = vector_search(question)
 
-        prompt = f"""
-You are an AI research assistant.
+        if len(context.strip()) < 30:
+            return "No relevant information found in research documents."
 
-Answer the question using ONLY the research document context.
+        prompt = f"""
+You are a research assistant.
+
+Answer ONLY using the research context below.
+If the answer is not in the context, say you do not know.
 
 CONTEXT:
 {context}
@@ -188,19 +204,27 @@ ANSWER:
         return response.content
 
 
-    # ---------------------------
+    # ------------------------------------
     # WEB SEARCH
-    # ---------------------------
+    # ------------------------------------
 
     elif route == "web":
 
         web_context = web_search(question)
 
+        if len(web_context.strip()) < 50:
+
+            return "I couldn't find reliable information from web search results."
+
         prompt = f"""
 You are an AI assistant.
 
-Answer ONLY using the WEB SEARCH RESULTS below.
-Do not rely on prior knowledge.
+Answer ONLY using the WEB SEARCH RESULTS.
+Do NOT use prior knowledge.
+Do NOT guess.
+
+If the answer is not clearly in the results,
+say "I could not find the answer in search results."
 
 WEB SEARCH RESULTS:
 {web_context}
@@ -208,7 +232,7 @@ WEB SEARCH RESULTS:
 QUESTION:
 {question}
 
-ANSWER:
+ANSWER (include source if possible):
 """
 
         response = llm.invoke(prompt)
@@ -216,9 +240,9 @@ ANSWER:
         return response.content
 
 
-    # ---------------------------
+    # ------------------------------------
     # GENERAL KNOWLEDGE
-    # ---------------------------
+    # ------------------------------------
 
     else:
 
