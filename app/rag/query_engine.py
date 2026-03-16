@@ -8,7 +8,7 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 
 
 # --------------------------------------------------
-# Load API keys from Streamlit Secrets
+# Load API Keys from Streamlit Secrets
 # --------------------------------------------------
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
@@ -44,7 +44,7 @@ embeddings = HuggingFaceEmbeddings(
 
 
 # --------------------------------------------------
-# Load FAISS Vector DB safely
+# Load FAISS Vector DB
 # --------------------------------------------------
 
 try:
@@ -54,7 +54,7 @@ try:
         allow_dangerous_deserialization=True
     )
 except Exception as e:
-    print("FAISS loading error:", e)
+    print("Vector DB load error:", e)
     vector_db = None
 
 
@@ -62,7 +62,87 @@ except Exception as e:
 # Tavily Web Search
 # --------------------------------------------------
 
-search = TavilySearchResults(k=2)
+search = TavilySearchResults(k=5)
+
+
+# --------------------------------------------------
+# Question Router
+# --------------------------------------------------
+
+def route_question(question: str):
+
+    q = question.lower()
+
+    # research / battery related → vector db
+    if any(word in q for word in [
+        "battery", "lithium", "li-ion", "recycling",
+        "electrode", "cathode", "anode"
+    ]):
+        return "vector"
+
+    # latest info → web search
+    if any(word in q for word in [
+        "latest", "today", "news", "2024", "2025",
+        "recent", "current"
+    ]):
+        return "web"
+
+    # default → LLM knowledge
+    return "llm"
+
+
+# --------------------------------------------------
+# Vector RAG
+# --------------------------------------------------
+
+def vector_search(question):
+
+    if not vector_db:
+        return ""
+
+    docs = vector_db.similarity_search(question, k=3)
+
+    context = ""
+
+    for doc in docs:
+        context += doc.page_content[:500] + "\n\n"
+
+    return context
+
+
+# --------------------------------------------------
+# Tavily Web Search
+# --------------------------------------------------
+
+def web_search(question):
+
+    web_results = ""
+
+    try:
+
+        results = search.invoke({"query": question})
+
+        for r in results:
+            web_results += f"{r['title']}\n{r['content']}\nSource: {r['url']}\n\n"
+
+    except Exception as e:
+        print("Web search error:", e)
+
+    return web_results
+
+
+# --------------------------------------------------
+# LLM Response
+# --------------------------------------------------
+
+def llm_answer(question):
+
+    try:
+        response = llm.invoke(question)
+        return response.content
+    except Exception as e:
+        print("LLM error:", e)
+        return "LLM service unavailable."
 
 
 # --------------------------------------------------
@@ -73,73 +153,67 @@ def hybrid_query(question: str):
 
     print("\nUser Question:", question)
 
-    # ---------------------------
-    # 1️⃣ Vector Search
-    # ---------------------------
+    route = route_question(question)
 
-    vector_context = ""
-
-    if vector_db:
-        docs = vector_db.similarity_search(question, k=2)
-
-        for doc in docs:
-            vector_context += doc.page_content[:400] + "\n\n"
+    print("Route selected:", route)
 
 
-    # ---------------------------
-    # 2️⃣ Web Search
-    # ---------------------------
+    # ----------------------------------
+    # Vector DB Route
+    # ----------------------------------
 
-    web_results = ""
+    if route == "vector":
 
-    try:
-        results = search.invoke({"query": question})
+        context = vector_search(question)
 
-        for r in results:
-            web_results += r["content"] + "\n\n"
+        prompt = f"""
+You are an AI research assistant.
 
-    except Exception as e:
-        print("Web search error:", e)
+Use the following research document context to answer the question.
 
+CONTEXT:
+{context}
 
-    # ---------------------------
-    # 3️⃣ Build Prompt
-    # ---------------------------
-
-    final_prompt = f"""
-You are a helpful AI research assistant.
-
-Use the context below to answer the user's question.
-
-Rules:
-- Prefer local document context if relevant.
-- Use web search results for latest information.
-- If neither contains the answer, use general knowledge.
-- Be concise and clear.
-
------------------------------
-LOCAL DOCUMENT CONTEXT:
-{vector_context}
-
-WEB SEARCH RESULTS:
-{web_results}
-
------------------------------
-USER QUESTION:
+QUESTION:
 {question}
 
-FINAL ANSWER:
+ANSWER:
 """
 
-
-    # ---------------------------
-    # 4️⃣ LLM Response
-    # ---------------------------
-
-    try:
-        response = llm.invoke(final_prompt)
+        response = llm.invoke(prompt)
         return response.content
 
-    except Exception as e:
-        print("Groq error:", e)
-        return "Sorry, the AI service is currently unavailable."
+
+    # ----------------------------------
+    # Web Search Route
+    # ----------------------------------
+
+    elif route == "web":
+
+        web_context = web_search(question)
+
+        prompt = f"""
+You are an AI assistant.
+
+Use the web search results below to answer the question.
+
+WEB RESULTS:
+{web_context}
+
+QUESTION:
+{question}
+
+ANSWER:
+"""
+
+        response = llm.invoke(prompt)
+        return response.content
+
+
+    # ----------------------------------
+    # General Knowledge Route
+    # ----------------------------------
+
+    else:
+
+        return llm_answer(question)
