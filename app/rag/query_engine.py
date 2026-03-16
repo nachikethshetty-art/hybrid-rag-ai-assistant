@@ -8,7 +8,7 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 
 
 # --------------------------------------------------
-# Load API Keys from Streamlit Secrets
+# API Keys (Streamlit secrets)
 # --------------------------------------------------
 
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
@@ -24,7 +24,7 @@ VECTOR_PATH = os.path.join(BASE_DIR, "vectorstore")
 
 
 # --------------------------------------------------
-# LLM Setup (Groq)
+# LLM Setup
 # --------------------------------------------------
 
 llm = ChatGroq(
@@ -44,7 +44,7 @@ embeddings = HuggingFaceEmbeddings(
 
 
 # --------------------------------------------------
-# Load FAISS Vector DB
+# Load FAISS
 # --------------------------------------------------
 
 try:
@@ -56,7 +56,7 @@ try:
     print("Vector DB loaded")
 
 except Exception as e:
-    print("Vector DB error:", e)
+    print("Vector DB not available:", e)
     vector_db = None
 
 
@@ -68,28 +68,27 @@ search = TavilySearchResults(k=10)
 
 
 # --------------------------------------------------
-# Question Router
+# Router
 # --------------------------------------------------
 
 def route_question(question: str):
 
     q = question.lower()
 
-    # Battery / research → vector DB
+    # research documents
     if any(word in q for word in [
-        "battery", "lithium", "li-ion",
-        "recycling", "cathode", "anode"
+        "battery", "lithium", "li-ion", "recycling",
+        "cathode", "anode"
     ]):
         return "vector"
 
-    # sports / news / latest info → web search
+    # current events / sports / news
     if any(word in q for word in [
-        "ipl", "cricket", "winner", "match",
+        "ipl", "match", "winner", "score",
         "latest", "today", "news", "2024", "2025"
     ]):
         return "web"
 
-    # default → LLM
     return "llm"
 
 
@@ -102,7 +101,7 @@ def vector_search(question):
     if not vector_db:
         return ""
 
-    docs = vector_db.similarity_search(question, k=3)
+    docs = vector_db.similarity_search(question, k=4)
 
     context = ""
 
@@ -118,7 +117,7 @@ def vector_search(question):
 
 def web_search(question):
 
-    web_context = ""
+    context = ""
 
     try:
 
@@ -133,23 +132,46 @@ def web_search(question):
             content = r.get("content", "")
             url = r.get("url", "")
 
-            web_context += f"{title}\n{content}\nSource: {url}\n\n"
+            context += f"{title}\n{content}\nSource: {url}\n\n"
 
     except Exception as e:
-        print("Web search error:", e)
+        print("Search error:", e)
 
-    return web_context
+    return context
 
 
 # --------------------------------------------------
-# LLM Answer (General Knowledge)
+# Answer using LLM with grounding
 # --------------------------------------------------
 
-def llm_answer(question):
+def grounded_answer(question, context):
+
+    if len(context.strip()) < 50:
+        return "I couldn't find reliable information in the retrieved sources."
+
+    prompt = f"""
+You are a fact-checking AI assistant.
+
+You MUST follow these rules:
+
+1. Use ONLY the information from the provided sources.
+2. Do NOT use prior knowledge.
+3. If the answer is not clearly stated, say:
+   "I could not find the answer in the sources."
+4. Include the source link in your answer.
+
+SOURCES:
+{context}
+
+QUESTION:
+{question}
+
+FINAL ANSWER:
+"""
 
     try:
 
-        response = llm.invoke(question)
+        response = llm.invoke(prompt)
 
         return response.content
 
@@ -161,88 +183,58 @@ def llm_answer(question):
 
 
 # --------------------------------------------------
+# General LLM Answer
+# --------------------------------------------------
+
+def llm_answer(question):
+
+    try:
+        response = llm.invoke(question)
+        return response.content
+
+    except Exception as e:
+        print("LLM error:", e)
+        return "LLM service unavailable."
+
+
+# --------------------------------------------------
 # Hybrid Query Engine
 # --------------------------------------------------
 
 def hybrid_query(question: str):
 
-    print("\nUser Question:", question)
+    print("\nQuestion:", question)
 
     route = route_question(question)
 
-    print("Selected route:", route)
+    print("Route:", route)
 
 
-    # ------------------------------------
+    # ------------------------
     # VECTOR RAG
-    # ------------------------------------
+    # ------------------------
 
     if route == "vector":
 
         context = vector_search(question)
 
-        if len(context.strip()) < 30:
-            return "No relevant information found in research documents."
-
-        prompt = f"""
-You are a research assistant.
-
-Answer ONLY using the research context below.
-If the answer is not in the context, say you do not know.
-
-CONTEXT:
-{context}
-
-QUESTION:
-{question}
-
-ANSWER:
-"""
-
-        response = llm.invoke(prompt)
-
-        return response.content
+        return grounded_answer(question, context)
 
 
-    # ------------------------------------
+    # ------------------------
     # WEB SEARCH
-    # ------------------------------------
+    # ------------------------
 
     elif route == "web":
 
-        web_context = web_search(question)
+        context = web_search(question)
 
-        if len(web_context.strip()) < 50:
-
-            return "I couldn't find reliable information from web search results."
-
-        prompt = f"""
-You are an AI assistant.
-
-Answer ONLY using the WEB SEARCH RESULTS.
-Do NOT use prior knowledge.
-Do NOT guess.
-
-If the answer is not clearly in the results,
-say "I could not find the answer in search results."
-
-WEB SEARCH RESULTS:
-{web_context}
-
-QUESTION:
-{question}
-
-ANSWER (include source if possible):
-"""
-
-        response = llm.invoke(prompt)
-
-        return response.content
+        return grounded_answer(question, context)
 
 
-    # ------------------------------------
+    # ------------------------
     # GENERAL KNOWLEDGE
-    # ------------------------------------
+    # ------------------------
 
     else:
 
