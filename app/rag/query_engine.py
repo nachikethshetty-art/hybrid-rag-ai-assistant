@@ -1,5 +1,5 @@
 import os
-from dotenv import load_dotenv
+import streamlit as st
 
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -8,13 +8,11 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 
 
 # --------------------------------------------------
-# Load environment variables
+# Load API keys from Streamlit Secrets
 # --------------------------------------------------
 
-load_dotenv()
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+TAVILY_API_KEY = st.secrets["TAVILY_API_KEY"]
 
 
 # --------------------------------------------------
@@ -46,21 +44,25 @@ embeddings = HuggingFaceEmbeddings(
 
 
 # --------------------------------------------------
-# Load FAISS Vector DB
+# Load FAISS Vector DB safely
 # --------------------------------------------------
 
-vector_db = FAISS.load_local(
-    VECTOR_PATH,
-    embeddings,
-    allow_dangerous_deserialization=True
-)
+try:
+    vector_db = FAISS.load_local(
+        VECTOR_PATH,
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
+except Exception as e:
+    print("FAISS loading error:", e)
+    vector_db = None
 
 
 # --------------------------------------------------
 # Tavily Web Search
 # --------------------------------------------------
 
-search = TavilySearch(k=2)
+search = TavilySearchResults(k=2)
 
 
 # --------------------------------------------------
@@ -75,12 +77,13 @@ def hybrid_query(question: str):
     # 1️⃣ Vector Search
     # ---------------------------
 
-    docs = vector_db.similarity_search(question, k=2)
-
     vector_context = ""
 
-    for doc in docs:
-        vector_context += doc.page_content[:400] + "\n\n"
+    if vector_db:
+        docs = vector_db.similarity_search(question, k=2)
+
+        for doc in docs:
+            vector_context += doc.page_content[:400] + "\n\n"
 
 
     # ---------------------------
@@ -104,7 +107,7 @@ def hybrid_query(question: str):
     # ---------------------------
 
     final_prompt = f"""
-You are a helpful AI assistant.
+You are a helpful AI research assistant.
 
 Use the context below to answer the user's question.
 
@@ -112,7 +115,7 @@ Rules:
 - Prefer local document context if relevant.
 - Use web search results for latest information.
 - If neither contains the answer, use general knowledge.
-- Do not explain your reasoning process.
+- Be concise and clear.
 
 -----------------------------
 LOCAL DOCUMENT CONTEXT:
